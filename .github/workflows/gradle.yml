@@ -7,7 +7,7 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,18 +25,55 @@ jobs:
           arguments: build
 
       - name: Run tests
-        run: gradle test
+        run: gradle test jacocoTestReport
 
       - name: Generate JaCoCo Badge
         id: jacoco
-        uses: cicirello/jacoco-badge-generator@v2
+        uses: cicirello/jacoco-badge-generator@v2.11.1
         with:
           generate-branches-badge: true
 
-      - name: Log coverage percentages
+      - name: Retrieve previous coverage
+        uses: actions/cache@v3
+        id: previous-coverage
+        with:
+          path: |
+            previous-coverage.txt
+            previous-branch-coverage.txt
+          key: ${{ runner.os }}-coverage-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-coverage-
+
+      - name: Check Code Coverage
+        env:
+          CURRENT_COVERAGE: ${{ steps.jacoco.outputs.coverage }}
+          CURRENT_BRANCH_COVERAGE: ${{ steps.jacoco.outputs.branches }}
         run: |
-          echo "Code coverage: ${{ steps.jacoco.outputs.coverage }}"
-          echo "Branch coverage: ${{ steps.jacoco.outputs.branches }}"
+          # Read previous coverage
+          PREV_COVERAGE=$(cat previous-coverage.txt 2>/dev/null || echo "0")
+          PREV_BRANCH_COVERAGE=$(cat previous-branch-coverage.txt 2>/dev/null || echo "0")
+          
+          
+          CURRENT_COVERAGE_NUM=$(echo "$CURRENT_COVERAGE" | sed 's/%//')
+          CURRENT_BRANCH_COVERAGE_NUM=$(echo "$CURRENT_BRANCH_COVERAGE" | sed 's/%//')
+          
+          PREV_COVERAGE_NUM=$(echo "$PREV_COVERAGE" | sed 's/%//')
+          PREV_BRANCH_COVERAGE_NUM=$(echo "$PREV_BRANCH_COVERAGE" | sed 's/%//')
+          
+          
+          if (( $(echo "$CURRENT_COVERAGE_NUM < $PREV_COVERAGE_NUM" | bc -l) )) || 
+             (( $(echo "$CURRENT_BRANCH_COVERAGE_NUM < $PREV_BRANCH_COVERAGE_NUM" | bc -l) )); then
+            echo "Coverage has decreased:"
+            echo "Previous Coverage: $PREV_COVERAGE"
+            echo "Current Coverage: $CURRENT_COVERAGE"
+            echo "Previous Branch Coverage: $PREV_BRANCH_COVERAGE"
+            echo "Current Branch Coverage: $CURRENT_BRANCH_COVERAGE"
+            exit 1
+          fi
+          
+          
+          echo "$CURRENT_COVERAGE" > previous-coverage.txt
+          echo "$CURRENT_BRANCH_COVERAGE" > previous-branch-coverage.txt
 
       - name: Docker Login
         uses: docker/login-action@v2
@@ -50,14 +87,3 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/ci-helloworld:latest
-
-      - name: Check Code Coverage
-        env:
-          COVERAGE: ${{ steps.jacoco.outputs.coverage }}
-          BRANCHES: ${{ steps.jacoco.outputs.branches }}
-        run: |
-          # This part needs to be customized based on your previous run's coverage
-          # You'll need to store previous coverage in a file or use GitHub Actions cache
-          echo "Current coverage: $COVERAGE"
-          echo "Current branch coverage: $BRANCHES"
-          # Add logic to compare with previous run
