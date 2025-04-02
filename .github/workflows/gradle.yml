@@ -32,6 +32,8 @@ jobs:
         uses: cicirello/jacoco-badge-generator@v2
         with:
           generate-branches-badge: true
+          jacoco-csv-file: build/reports/jacoco/test/jacocoTestReport.csv
+
 
       - name: Retrieve previous coverage
         uses: actions/cache@v3

@@ -11,16 +11,17 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 
-jacocoTestReport {
-    reports {
-        xml.required = true
-        csv.required = false
-        html.destination file("${buildDir}/jacocoHtml")
-    }
-}
-
 test {
     finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        csv.required = true
+        html.destination file("${buildDir}/jacocoHtml")
+    }
 }
 
 jacoco {
